@@ -1,1 +1,130 @@
-<!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tercih Radarı</title><style>body{font-family:Arial;margin:0;background:#f5f7fb;color:#172033}header{background:#24305e;color:white;padding:24px}main{padding:18px}.card{background:white;border:1px solid #e3e7ef;border-radius:14px;padding:16px;margin-bottom:14px}button,input,select{width:100%;padding:12px;margin-top:8px;border:1px solid #ccd2de;border-radius:10px;box-sizing:border-box}button{background:#4b55c5;color:white;font-weight:bold}.muted{color:#667085;font-size:13px}.result{margin-top:12px;padding:12px;background:#f2f4ff;border-left:4px solid #4b55c5;border-radius:8px}</style><header><h1>Tercih Radarı</h1><div>2025 esaslı çevrimdışı hesaplama sürümü</div></header><main><div class="card"><h2>YKS tercih hesabı</h2><label>Başarı sırası</label><input id="rank" type="number" value="52000"><label>Puan türü</label><select id="type"><option>SAY</option><option>EA</option></select><button id="calc">Hesapla</button><div id="out" class="result">Sıralamanızı girip hesaplayın.</div></div><div class="card"><h2>Uçuk senaryo</h2><label>Kontenjan değişimi (%)</label><input id="quota" type="number" value="-20"><label>Talep değişimi (%)</label><input id="demand" type="number" value="25"><button id="wild">Senaryoyu çalıştır</button><div id="wildout" class="result">Bu bölüm spekülatif model üretir.</div></div><div class="card muted">Bu uygulama karar destek aracıdır. 2026 verisi içermez. Gerçek resmî veri tabanı henüz eklenmemiştir; sonuçlar örnek hesaplama mantığıdır.</div></main><script>document.getElementById('calc').addEventListener('click',()=>{const r=+rank.value;const t=type.value;let msg=r<30000?'İddialı üst programlar araştırılabilir.':r<60000?'Muhtemel ve güvenli tercihler birlikte yazılabilir.':'Güvenli tercih havuzu geniş tutulmalı.';out.innerHTML='<b>'+t+' · '+r.toLocaleString('tr-TR')+'</b><br>'+msg});document.getElementById('wild').addEventListener('click',()=>{const r=+rank.value,q=+quota.value,d=+demand.value;const pressure=(-q*.55+d*.65)/100;const e=Math.max(1,Math.round(r*(1-pressure)));wildout.innerHTML='<b>Spekülatif eşik: '+e.toLocaleString('tr-TR')+'</b><br>Kontenjan '+q+'%, talep '+d+'% varsayımıyla.'});</script></html>
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Tercih Radarı</title>
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--text:#172033;--muted:#667085;--line:#e3e7ef;--primary:#3949ab;--primary2:#5c6bc0;--safe:#087f5b;--warn:#a05a00;--risk:#b42318;--chip:#eef1ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,sans-serif}header{background:linear-gradient(135deg,#1f2a61,#4b55c5);color:#fff;padding:22px 18px 18px;position:sticky;top:0;z-index:5}h1{font-size:25px;margin:0}.subtitle{font-size:13px;opacity:.9;margin-top:5px}.status{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}.chip{display:inline-block;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:700;background:#ffffff24;border:1px solid #ffffff3d}.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:14px}.tab{border:0;border-radius:9px;padding:9px 4px;background:#ffffff1c;color:white;font-size:12px}.tab.active{background:white;color:#24305e;font-weight:700}main{padding:14px;max-width:900px;margin:auto}.panel{display:none}.panel.active{display:block}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px;margin-bottom:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}label{font-size:12px;font-weight:700;display:block;margin-bottom:5px}input,select,button{width:100%;min-height:44px;border-radius:10px;border:1px solid #cdd3df;padding:10px;background:#fff;color:var(--text);font-size:15px}button.primary{background:var(--primary);border:0;color:white;font-weight:700}button.secondary{background:var(--chip);border:0;color:#2d3a9f;font-weight:700}.muted{font-size:12px;color:var(--muted);line-height:1.45}.notice{background:#fff8e7;border:1px solid #efd18e;color:#654400;padding:11px;border-radius:10px;font-size:12px}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.metric{background:#f7f8fc;border:1px solid var(--line);padding:10px;border-radius:11px}.metric b{font-size:20px;display:block}.metric span{font-size:11px;color:var(--muted)}.result{background:#fafbff;border:1px solid var(--line);border-left:5px solid var(--primary);border-radius:11px;padding:12px;margin-top:10px}.result.safe{border-left-color:var(--safe)}.result.warn{border-left-color:var(--warn)}.result.risk{border-left-color:var(--risk)}.result h3{font-size:15px;margin:7px 0}.tag{font-size:10px;font-weight:700;padding:4px 7px;border-radius:999px;background:var(--chip);color:#3342a0;display:inline-block;margin-right:4px}.tag.official{background:#e8f7f0;color:#087f5b}.tag.model{background:#fff0e1;color:#a05a00}.row{display:flex;gap:8px;align-items:center;justify-content:space-between}.score{font-size:18px;font-weight:800}.history{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:8px}.yearbox{background:#f4f6fa;border-radius:8px;padding:7px;text-align:center;font-size:11px}.yearbox b{display:block;font-size:13px}.empty{text-align:center;padding:25px 10px;color:var(--muted)}.source{word-break:break-word;font-size:11px;border-top:1px solid var(--line);padding-top:8px;margin-top:8px}@media(max-width:600px){.grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}.tabs{grid-template-columns:repeat(2,1fr)}.history{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<header>
+<h1>Tercih Radarı</h1>
+<div class="subtitle">2022–2025 resmî ÖSYM verisi ve deneysel tercih senaryoları</div>
+<div class="status"><span class="chip" id="dataState">Veri yükleniyor…</span><span class="chip">2026 verisi yok</span></div>
+<div class="tabs">
+<button class="tab active" data-panel="robot">Tercih Robotu</button>
+<button class="tab" data-panel="search">Program Ara</button>
+<button class="tab" data-panel="wild">Uçuk Senaryo</button>
+<button class="tab" data-panel="source">Kaynak</button>
+</div>
+</header>
+<main>
+<section id="robot" class="panel active">
+<div class="card">
+<div class="grid">
+<div><label for="year">Yerleştirme yılı</label><select id="year"><option>2025</option><option>2024</option><option>2023</option><option>2022</option></select></div>
+<div><label for="scoreType">Puan türü</label><select id="scoreType"><option>SAY</option><option>EA</option><option>SÖZ</option><option>DİL</option></select></div>
+<div><label for="userScore">YKS yerleştirme puanı</label><input id="userScore" type="number" min="100" max="600" step="0.01" value="440"></div>
+<div><label for="keyword">Üniversite / bölüm filtresi</label><input id="keyword" placeholder="Örn. Konya, Tıp, Bilgisayar"></div>
+</div>
+<button id="runRobot" class="primary" style="margin-top:10px">Gerçek veride karşılaştır</button>
+<p class="muted">Sınıflandırma, seçilen yılın resmî en küçük puanıyla farkınıza göre yapılır. “İddialı, muhtemel, güvenli” ifadeleri model yorumudur; yerleşme garantisi değildir.</p>
+</div>
+<div class="metrics">
+<div class="metric"><b id="totalPrograms">—</b><span>veri setindeki program</span></div>
+<div class="metric"><b id="matchedPrograms">—</b><span>filtreye uyan</span></div>
+<div class="metric"><b id="dataYear">2025</b><span>analiz yılı</span></div>
+</div>
+<div id="robotResults"><div class="empty">Veri yüklendikten sonra puanınızı girin.</div></div>
+</section>
+
+<section id="search" class="panel">
+<div class="card">
+<label for="searchText">Program, üniversite veya program kodu</label><input id="searchText" placeholder="Örn. Selçuk Üniversitesi Tıp">
+<div class="grid" style="margin-top:9px"><div><label for="searchType">Puan türü</label><select id="searchType"><option value="">Tümü</option><option>SAY</option><option>EA</option><option>SÖZ</option><option>DİL</option></select></div><div><label for="searchYear">Son veri yılı</label><select id="searchYear"><option value="">Tümü</option><option>2025</option><option>2024</option><option>2023</option><option>2022</option></select></div></div>
+<button id="runSearch" class="primary" style="margin-top:10px">Ara</button>
+</div>
+<div id="searchResults"><div class="empty">Bir üniversite veya bölüm adı yazın.</div></div>
+</section>
+
+<section id="wild" class="panel">
+<div class="card">
+<div class="notice">Bu bölüm spekülatif modeldir. Resmî ÖSYM verisini başlangıç noktası olarak kullanır; gelecek sonucu kesin olarak göstermez.</div>
+<label for="wildProgram" style="margin-top:10px">Program seç</label><select id="wildProgram"></select>
+<div class="grid" style="margin-top:9px"><div><label for="quotaChange">Kontenjan değişimi (%)</label><input id="quotaChange" type="number" value="-20"></div><div><label for="demandChange">Talep değişimi (%)</label><input id="demandChange" type="number" value="25"></div></div>
+<button id="runWild" class="primary" style="margin-top:10px">2.000 senaryo çalıştır</button>
+</div>
+<div id="wildResult"><div class="empty">Program ve varsayımları seçin.</div></div>
+</section>
+
+<section id="source" class="panel">
+<div class="card">
+<h2 style="font-size:18px;margin-top:0">Veri şeffaflığı</h2>
+<p>Uygulamadaki program kodu, program adı, kontenjan, yerleşen sayısı ve en küçük/en büyük puanlar ÖSYM’nin 2022, 2023, 2024 ve 2025 YKS merkezî yerleştirme Tablo-4 Excel dosyalarından üretilir.</p>
+<div class="notice"><b>Etiketler:</b><br><span class="tag official">Resmî veri</span> ÖSYM tablosundan doğrudan alınır.<br><span class="tag">Türetilmiş</span> yıllar arası fark/oynaklık hesabıdır.<br><span class="tag model">Model tahmini</span> varsayımlı deneysel sonuçtur.</div>
+<p class="muted" id="sourceInfo">Kaynak bilgisi yükleniyor.</p>
+<p class="muted">Uygulama karar destek aracıdır; nihai tercih öncesinde ÖSYM kılavuzu ve YÖK Atlas kontrol edilmelidir.</p>
+</div>
+</section>
+</main>
+<script>
+const REMOTE_DATA='https://raw.githubusercontent.com/avhakanguner-netizen/hakan/main/tercih-radari-android/public/data/programs.json';
+let dataset=null;
+const $=id=>document.getElementById(id);
+const tr=n=>Number(n).toLocaleString('tr-TR',{maximumFractionDigits:3});
+const norm=s=>(s||'').toLocaleLowerCase('tr-TR');
+
+document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));btn.classList.add('active');$(btn.dataset.panel).classList.add('active')}));
+
+async function loadData(){
+  let remote=false;
+  try{const r=await fetch(REMOTE_DATA+'?t='+Date.now(),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);dataset=await r.json();remote=true}catch(e){try{const r=await fetch('programs.json');dataset=await r.json()}catch(inner){$('dataState').textContent='Veri yüklenemedi';$('sourceInfo').textContent='Veri dosyası açılamadı: '+inner;return}}
+  $('dataState').textContent=(remote?'Çevrim içi güncel':'APK içi çevrimdışı')+' · '+tr(dataset.programCount)+' program';
+  $('totalPrograms').textContent=tr(dataset.programCount);
+  $('sourceInfo').textContent=dataset.source+' · Üretim: '+new Date(dataset.generatedAt).toLocaleString('tr-TR')+' · Yıllar: '+dataset.years.join(', ');
+  fillWildPrograms();runRobot();
+}
+
+function getHistory(program,year){return program.history.find(h=>Number(h.year)===Number(year));}
+function classify(diff){if(diff<-12)return {name:'Çok iddialı',cls:'risk'};if(diff<-3)return {name:'İddialı',cls:'risk'};if(diff<5)return {name:'Sınırda',cls:'warn'};if(diff<20)return {name:'Muhtemel',cls:''};return {name:'Güvenli bant',cls:'safe'};}
+function historyHtml(p){return '<div class="history">'+p.history.map(h=>'<div class="yearbox"><span>'+h.year+'</span><b>'+(h.min_score==null?'—':tr(h.min_score))+'</b><small>min puan</small></div>').join('')+'</div>';}
+function resultCard(p,h,extra=''){
+ return '<div class="result '+(extra.cls||'')+'"><div class="row"><div><span class="tag official">Resmî veri</span>'+(extra.label?'<span class="tag">'+extra.label+'</span>':'')+'</div><span class="score">'+(h.min_score==null?'—':tr(h.min_score))+'</span></div><h3>'+escapeHtml(p.university)+' · '+escapeHtml(p.program)+'</h3><div class="muted">Kod: '+p.code+' · '+(p.scoreType||'Puan türü belirtilmemiş')+' · Kontenjan: '+(h.quota==null?'—':tr(h.quota))+' · Yerleşen: '+(h.placed==null?'—':tr(h.placed))+'</div>'+historyHtml(p)+(extra.note?'<p class="muted">'+extra.note+'</p>':'')+'<div class="source">Kaynak: ÖSYM '+h.year+' YKS merkezî yerleştirme Tablo-4</div></div>';
+}
+function escapeHtml(s){return String(s||'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+
+function runRobot(){
+ if(!dataset)return;
+ const year=Number($('year').value),type=$('scoreType').value,score=Number($('userScore').value),key=norm($('keyword').value.trim());
+ let rows=[];
+ dataset.programs.forEach(p=>{const h=getHistory(p,year);if(!h||h.min_score==null||p.scoreType!==type)return;const hay=norm(p.university+' '+p.program+' '+p.code);if(key&&!hay.includes(key))return;const diff=score-h.min_score;rows.push({p,h,diff,c:classify(diff)})});
+ rows.sort((a,b)=>Math.abs(a.diff)-Math.abs(b.diff));
+ $('matchedPrograms').textContent=tr(rows.length);$('dataYear').textContent=year;
+ const selected=rows.slice(0,40);
+ $('robotResults').innerHTML=selected.length?selected.map(x=>resultCard(x.p,x.h,{label:x.c.name,cls:x.c.cls,note:'Puan farkı: '+(x.diff>=0?'+':'')+tr(x.diff)+'. Bu sınıf model yorumudur; resmî yerleşme sonucu değildir.'})).join(''):'<div class="empty">Bu filtrede resmî puanı bulunan program bulunamadı.</div>';
+}
+
+function runSearch(){
+ if(!dataset)return;const q=norm($('searchText').value.trim()),type=$('searchType').value,year=$('searchYear').value;
+ if(!q){$('searchResults').innerHTML='<div class="empty">Arama metni yazın.</div>';return}
+ let rows=dataset.programs.filter(p=>norm(p.university+' '+p.program+' '+p.code).includes(q)&&(!type||p.scoreType===type)&&(!year||p.history.some(h=>String(h.year)===year))).slice(0,80);
+ $('searchResults').innerHTML=rows.length?rows.map(p=>{const h=year?getHistory(p,year):p.history[p.history.length-1];return resultCard(p,h||p.history[p.history.length-1]);}).join(''):'<div class="empty">Eşleşen program bulunamadı.</div>';
+}
+
+function fillWildPrograms(){
+ const list=dataset.programs.filter(p=>p.latestMinScore!=null&&p.history.length>=2).sort((a,b)=>(b.latestMinScore||0)-(a.latestMinScore||0)).slice(0,1500);
+ $('wildProgram').innerHTML=list.map(p=>'<option value="'+p.code+'">'+escapeHtml(p.university+' · '+p.program+' ('+p.scoreType+')')+'</option>').join('');
+}
+function percentile(arr,p){const a=[...arr].sort((x,y)=>x-y);const i=(a.length-1)*p,l=Math.floor(i),u=Math.ceil(i);return l===u?a[l]:a[l]+(a[u]-a[l])*(i-l);}
+function gaussian(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+function runWild(){
+ if(!dataset)return;const p=dataset.programs.find(x=>x.code===$('wildProgram').value);if(!p)return;const base=p.latestMinScore,q=Number($('quotaChange').value),d=Number($('demandChange').value);const hist=p.history.map(x=>x.min_score).filter(x=>x!=null);let changes=[];for(let i=1;i<hist.length;i++)changes.push(hist[i]-hist[i-1]);const mean=changes.length?changes.reduce((a,b)=>a+b,0)/changes.length:0;const sd=Math.max(2,p.volatility||6);const structural=(-q*.10+d*.08);let sims=[];for(let i=0;i<2000;i++)sims.push(Math.max(100,Math.min(600,base+mean+structural+gaussian()*sd)));const med=percentile(sims,.5),lo=percentile(sims,.1),hi=percentile(sims,.9);const h=p.history[p.history.length-1];$('wildResult').innerHTML='<div class="result warn"><span class="tag model">Model tahmini</span><h3>'+escapeHtml(p.university+' · '+p.program)+'</h3><div class="metrics"><div class="metric"><b>'+tr(med)+'</b><span>medyan senaryo</span></div><div class="metric"><b>'+tr(lo)+'</b><span>iyimser alt bant</span></div><div class="metric"><b>'+tr(hi)+'</b><span>zorlayıcı üst bant</span></div></div><p class="muted">Başlangıç: '+tr(base)+' resmî min puan. Kontenjan '+q+'%, talep '+d+'% varsayımı; tarihsel değişim ve oynaklıkla 2.000 rastgele senaryo çalıştırıldı. Bu sonuç resmî değildir.</p>'+historyHtml(p)+'</div>';
+}
+
+$('runRobot').addEventListener('click',runRobot);$('runSearch').addEventListener('click',runSearch);$('runWild').addEventListener('click',runWild);$('searchText').addEventListener('keydown',e=>{if(e.key==='Enter')runSearch()});
+loadData();
+</script>
+</body>
+</html>
