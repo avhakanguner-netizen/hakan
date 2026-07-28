@@ -25,8 +25,8 @@ jobs:
           cache-dependency-path: tercih-radari-android/tools/requirements.txt
       - run: pip install -r tercih-radari-android/tools/requirements.txt
       - name: Download and normalize official data
-        run: python tercih-radari-android/tools/build_dataset.py
-      - name: Validate years and record count
+        run: python tercih-radari-android/tools/build_dataset_v2.py
+      - name: Validate years, record count and university names
         run: |
           python - <<'PY'
           import json
@@ -35,7 +35,10 @@ jobs:
           assert data['years']==[2022,2023,2024,2025]
           assert 2026 not in data['years']
           assert data['programCount'] >= 500
-          print(data['programCount'])
+          bad={'DEVLET','VAKIF','KKTC','YABANCI','ÖZEL'}
+          invalid=sum((not x.get('university')) or x.get('university','').upper() in bad for x in data['programs'])
+          assert invalid / data['programCount'] <= 0.03
+          print('programCount=', data['programCount'], 'invalidUniversity=', invalid)
           PY
       - name: Commit refreshed data
         run: |
