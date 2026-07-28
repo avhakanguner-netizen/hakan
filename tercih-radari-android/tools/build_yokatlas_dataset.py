@@ -62,7 +62,7 @@ def post_page(session: requests.Session, page: int, size: int) -> dict[str, Any]
             if not isinstance(data, dict) or "content" not in data:
                 raise RuntimeError(f"Beklenmeyen API yanıtı: {str(data)[:500]}")
             return data
-        except Exception as exc:  # ağ/rate limit için kontrollü tekrar
+        except Exception as exc:
             last_error = exc
             if attempt == 5:
                 break
@@ -81,7 +81,7 @@ def fetch_all_rows() -> list[dict[str, Any]]:
             "Accept": "application/json, text/plain, */*",
             "Content-Type": "application/json",
             "Origin": "https://yokatlas.yok.gov.tr",
-            "Referer": "https://yokatlas.yok.gov.tr/tercih-sihirbazi-t4-tablo.php",
+            "Referer": "https://yokatlas.yok.gov.tr/",
         }
     )
     first = post_page(session, 0, size)
@@ -90,7 +90,7 @@ def fetch_all_rows() -> list[dict[str, Any]]:
     rows = list(first.get("content", []))
     print(
         f"YÖK Atlas: toplam={total_elements}, sayfa={total_pages}, "
-        f"ilk_sayfa={len(rows)}, size={size}"
+        f"ilk_sayfa={len(rows)}, size={size}, api_yili={first.get('yil')}"
     )
     for page_no in range(1, total_pages):
         page = post_page(session, page_no, size)
@@ -111,14 +111,17 @@ def yearly_from_flat(row: dict[str, Any], offset: int) -> dict[str, Any] | None:
     if year not in YEARS:
         return None
     suffix = "" if offset == 0 else str(offset)
+    # API güncel yılda genel kontenjanı `kontenjan`, önceki yıllarda `gk1/gk2/gk3` gönderiyor.
+    quota_value = row.get("kontenjan") if offset == 0 else row.get(f"gk{offset}")
+    placed_value = row.get("gkY") if offset == 0 else row.get(f"gkY{offset}")
     return {
         "year": year,
         "code": str(row.get("kilavuzKodu") or ""),
         "university": row.get("universiteAdi") or "",
         "program": row.get("birimAdi") or row.get("birimGrupAdi") or "",
         "score_type": row.get("puanTuru") or "",
-        "quota": safe_int(row.get(f"kontenjan{suffix}")),
-        "placed": safe_int(row.get(f"gkY{suffix}")),
+        "quota": safe_int(quota_value),
+        "placed": safe_int(placed_value),
         "min_score": safe_float(row.get(f"minPuan{suffix}")),
         "rank": safe_int(row.get(f"basariSirasi{suffix}")),
         "source_url": "https://yokatlas.yok.gov.tr/",
@@ -185,11 +188,12 @@ def build_dataset(rows: list[dict[str, Any]]) -> dict[str, Any]:
     )
     ranked = sum(item["latestRank"] is not None for item in programs)
     quota_count = sum(item["latestQuota"] is not None for item in programs)
+    actual_years = sorted({h["year"] for p in programs for h in p["history"]})
     return {
         "schemaVersion": 3,
         "generatedAt": datetime.now(timezone.utc).isoformat(),
-        "years": YEARS,
-        "source": "YÖK Atlas resmî tercih kılavuzu JSON API (2022-2025)",
+        "years": actual_years,
+        "source": "YÖK Atlas resmî tercih kılavuzu JSON API",
         "sourceUrl": "https://yokatlas.yok.gov.tr/",
         "disclaimer": "2026 verisi içermez. Tahminler resmî sonuç değildir.",
         "programCount": len(programs),
@@ -200,15 +204,15 @@ def build_dataset(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def validate(data: dict[str, Any]) -> None:
-    assert data["years"] == YEARS
     assert 2026 not in data["years"]
+    assert 2025 in data["years"]
     assert data["programCount"] >= 5000, data["programCount"]
     assert data["rankedProgramCount"] >= 3000, data["rankedProgramCount"]
     assert data["quotaProgramCount"] >= 3000, data["quotaProgramCount"]
     sample = next(item for item in data["programs"] if item["latestRank"] is not None)
     assert "latestQuota" in sample and "latestPlaced" in sample
     print(
-        f"Doğrulandı: {data['programCount']} program, "
+        f"Doğrulandı: yıllar={data['years']}, {data['programCount']} program, "
         f"{data['rankedProgramCount']} başarı sıralı, "
         f"{data['quotaProgramCount']} kontenjanlı program"
     )
