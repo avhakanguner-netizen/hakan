@@ -28,7 +28,27 @@ jobs:
       - name: Install data dependencies
         run: pip install -r tercih-radari-android/tools/requirements.txt
       - name: Build official YÖK Atlas 2022-2025 dataset
-        run: python tercih-radari-android/tools/build_yokatlas_dataset.py
+        id: dataset
+        continue-on-error: true
+        run: |
+          set +e
+          python tercih-radari-android/tools/build_yokatlas_dataset.py > yokatlas-build.log 2>&1
+          CODE=$?
+          cat yokatlas-build.log
+          echo "$CODE" > yokatlas-exit.txt
+          exit 0
+      - name: Upload YÖK Atlas diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: YokAtlas-Diagnostic
+          path: |
+            yokatlas-build.log
+            yokatlas-exit.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: Stop if dataset failed
+        run: test "$(cat yokatlas-exit.txt)" = "0"
       - name: Validate ranking and quota dataset
         run: |
           python - <<'PY'
