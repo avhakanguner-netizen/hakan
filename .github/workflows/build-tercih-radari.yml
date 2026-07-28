@@ -27,6 +27,8 @@ jobs:
           cache-dependency-path: tercih-radari-android/tools/requirements.txt
       - name: Install data dependencies
         run: pip install -r tercih-radari-android/tools/requirements.txt
+      - name: Inspect official table headers
+        run: python tercih-radari-android/tools/inspect_osym_headers.py
       - name: Build official 2022-2025 dataset
         run: python tercih-radari-android/tools/build_dataset_v2.py
       - name: Validate generated dataset
