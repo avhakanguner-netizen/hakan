@@ -1,0 +1,1 @@
+Bu dal, gerçek ÖSYM 2022-2025 verisiyle APK derleme ve doğrulama çalışmasını tetikler.
