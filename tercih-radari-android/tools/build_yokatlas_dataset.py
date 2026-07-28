@@ -43,35 +43,37 @@ def safe_int(value: Any) -> int | None:
 
 
 def fetch_all_programs() -> list[Any]:
-    settings = Settings(timeout=120.0, max_retries=5)
+    settings = Settings(timeout=120.0)
     filters = SearchFilters(birim_turu_id=46)  # lisans
     programs: list[Any] = []
+    page_size = 100
     with YokAtlasClient(settings=settings) as client:
         first = client.search(
             filters,
             page=0,
-            size=500,
-            sort_by="kilavuzKodu",
+            size=page_size,
+            sort_by="basariSirasi",
             direction="ASC",
             smart_search=False,
         )
         programs.extend(first.content)
         print(
             f"YÖK Atlas: toplam={first.total_elements}, sayfa={first.total_pages}, "
-            f"ilk_sayfa={len(first.content)}"
+            f"ilk_sayfa={len(first.content)}, size={page_size}"
         )
         for page_no in range(1, first.total_pages):
             page = client.search(
                 filters,
                 page=page_no,
-                size=500,
-                sort_by="kilavuzKodu",
+                size=page_size,
+                sort_by="basariSirasi",
                 direction="ASC",
                 smart_search=False,
             )
             programs.extend(page.content)
-            print(f"YÖK Atlas sayfa {page_no + 1}/{first.total_pages}: {len(page.content)}")
-            time.sleep(0.15)
+            if page_no % 10 == 0 or page_no + 1 == first.total_pages:
+                print(f"YÖK Atlas sayfa {page_no + 1}/{first.total_pages}: {len(page.content)}")
+            time.sleep(0.10)
     return programs
 
 
