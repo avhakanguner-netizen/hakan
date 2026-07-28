@@ -27,7 +27,7 @@ jobs:
           cache-dependency-path: tercih-radari-android/tools/requirements.txt
       - name: Install data dependencies
         run: pip install -r tercih-radari-android/tools/requirements.txt
-      - name: Build official YÖK Atlas 2022-2025 dataset
+      - name: Build official YÖK Atlas dataset
         id: dataset
         continue-on-error: true
         run: |
@@ -57,13 +57,14 @@ jobs:
           p=Path('tercih-radari-android/app/src/main/assets/programs.json')
           data=json.loads(p.read_text(encoding='utf-8'))
           assert data['schemaVersion'] >= 3
-          assert data['years']==[2022,2023,2024,2025]
+          assert 2025 in data['years']
           assert 2026 not in data['years']
           assert data['programCount'] >= 5000
           assert data['rankedProgramCount'] >= 3000
+          assert data['quotaProgramCount'] >= 3000
           sample=next(x for x in data['programs'] if x.get('latestRank') is not None)
           assert 'latestQuota' in sample and 'latestPlaced' in sample
-          print('programCount=',data['programCount'],'ranked=',data['rankedProgramCount'])
+          print('years=',data['years'],'programCount=',data['programCount'],'ranked=',data['rankedProgramCount'],'quota=',data['quotaProgramCount'])
           PY
       - uses: actions/setup-java@v4
         with:
