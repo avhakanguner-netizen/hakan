@@ -5,13 +5,42 @@ on:
     paths:
       - 'tercih-radari-android/**'
       - '.github/workflows/build-tercih-radari.yml'
+  pull_request:
+    paths:
+      - 'tercih-radari-android/**'
+      - '.github/workflows/build-tercih-radari.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tercih-radari-android/tools/requirements.txt
+      - name: Install data dependencies
+        run: pip install -r tercih-radari-android/tools/requirements.txt
+      - name: Build official 2022-2025 dataset
+        run: python tercih-radari-android/tools/build_dataset.py
+      - name: Validate generated dataset
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('tercih-radari-android/app/src/main/assets/programs.json')
+          data=json.loads(p.read_text(encoding='utf-8'))
+          assert data['years']==[2022,2023,2024,2025]
+          assert 2026 not in data['years']
+          assert data['programCount'] >= 500
+          print('programCount=', data['programCount'])
+          PY
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -23,8 +52,23 @@ jobs:
       - name: Build debug APK
         working-directory: tercih-radari-android
         run: gradle assembleDebug --stacktrace
+      - name: Verify APK structure
+        run: |
+          APK=tercih-radari-android/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          unzip -t "$APK"
+          ls -lh "$APK"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Tercih-Radari-APK
+          name: Tercih-Radari-2022-2025-APK
           path: tercih-radari-android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload generated public data
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tercih-Radari-Data
+          path: tercih-radari-android/public/data/programs.json
+          if-no-files-found: error
+          retention-days: 30
