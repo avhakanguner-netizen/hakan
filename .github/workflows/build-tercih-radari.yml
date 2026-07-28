@@ -27,23 +27,23 @@ jobs:
           cache-dependency-path: tercih-radari-android/tools/requirements.txt
       - name: Install data dependencies
         run: pip install -r tercih-radari-android/tools/requirements.txt
-      - name: Inspect official table headers
-        run: python tercih-radari-android/tools/inspect_osym_headers.py
-      - name: Build official 2022-2025 dataset
-        run: python tercih-radari-android/tools/build_dataset_v2.py
-      - name: Validate generated dataset
+      - name: Build official YÖK Atlas 2022-2025 dataset
+        run: python tercih-radari-android/tools/build_yokatlas_dataset.py
+      - name: Validate ranking and quota dataset
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           p=Path('tercih-radari-android/app/src/main/assets/programs.json')
           data=json.loads(p.read_text(encoding='utf-8'))
+          assert data['schemaVersion'] >= 3
           assert data['years']==[2022,2023,2024,2025]
           assert 2026 not in data['years']
-          assert data['programCount'] >= 500
-          bad={'DEVLET','VAKIF','KKTC','YABANCI','ÖZEL'}
-          assert sum((not x.get('university')) or x.get('university','').upper() in bad for x in data['programs']) / data['programCount'] <= 0.03
-          print('programCount=', data['programCount'])
+          assert data['programCount'] >= 5000
+          assert data['rankedProgramCount'] >= 3000
+          sample=next(x for x in data['programs'] if x.get('latestRank') is not None)
+          assert 'latestQuota' in sample and 'latestPlaced' in sample
+          print('programCount=',data['programCount'],'ranked=',data['rankedProgramCount'])
           PY
       - uses: actions/setup-java@v4
         with:
@@ -65,14 +65,14 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Tercih-Radari-2022-2025-APK
+          name: Tercih-Radari-Siralama-Kontenjan-APK
           path: tercih-radari-android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
       - name: Upload generated public data
         uses: actions/upload-artifact@v4
         with:
-          name: Tercih-Radari-Data
+          name: Tercih-Radari-Siralama-Data
           path: tercih-radari-android/public/data/programs.json
           if-no-files-found: error
           retention-days: 30
