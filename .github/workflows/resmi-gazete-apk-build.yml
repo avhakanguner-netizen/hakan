@@ -6,6 +6,7 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - 'resmi-gazete-apk-build.trigger'
+      - 'resmi-gazete-app/**'
 
 permissions:
   contents: read
@@ -13,7 +14,7 @@ permissions:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Check out build branch
         uses: actions/checkout@v4
@@ -38,29 +39,27 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Restore project
-        shell: bash
-        run: |
-          cat .tmp-rg-build/source.b64.* > project.b64
-          base64 --decode project.b64 > project.zip
-          unzip -q project.zip
-
       - name: Build installable APK
-        working-directory: ResmiGazeteOzeti
+        working-directory: resmi-gazete-app
         run: gradle --no-daemon --stacktrace clean assembleDebug
 
-      - name: Prepare package
+      - name: Verify and package
         shell: bash
         run: |
-          cp ResmiGazeteOzeti/app/build/outputs/apk/debug/app-debug.apk ResmiGazeteOzeti-v1.0.0.apk
+          cp resmi-gazete-app/app/build/outputs/apk/debug/app-debug.apk ResmiGazeteOzeti-v1.0.0.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose ResmiGazeteOzeti-v1.0.0.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging ResmiGazeteOzeti-v1.0.0.apk > ResmiGazeteOzeti-v1.0.0-APK-BILGI.txt
           sha256sum ResmiGazeteOzeti-v1.0.0.apk > ResmiGazeteOzeti-v1.0.0-SHA256.txt
+          (cd resmi-gazete-app && zip -qr ../ResmiGazeteOzeti-v1.0.0-AndroidStudio.zip . -x '*/build/*' '.gradle/*')
 
-      - name: Upload APK
+      - name: Upload ready package
         uses: actions/upload-artifact@v4
         with:
-          name: ResmiGazeteOzeti-APK
+          name: ResmiGazeteOzeti-HAZIR-PAKET
           path: |
             ResmiGazeteOzeti-v1.0.0.apk
             ResmiGazeteOzeti-v1.0.0-SHA256.txt
+            ResmiGazeteOzeti-v1.0.0-APK-BILGI.txt
+            ResmiGazeteOzeti-v1.0.0-AndroidStudio.zip
           if-no-files-found: error
           retention-days: 7
