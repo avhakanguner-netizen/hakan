@@ -21,7 +21,7 @@ jobs:
       - name: Restore Android project
         shell: bash
         run: |
-          base64 --decode resmi-gazete-v130/source.b64 > source.zip
+          cat resmi-gazete-v130/source.b64.* | base64 --decode > source.zip
           mkdir -p resmi-gazete-v130/project
           unzip -q source.zip -d resmi-gazete-v130/project
 
