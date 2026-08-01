@@ -1,0 +1,66 @@
+name: Temporary Fiyat Avcisi APK Build
+
+on:
+  pull_request:
+    branches: [ main ]
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'fiyat-avcisi-apk-build.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out build branch
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Restore project
+        shell: bash
+        run: |
+          cat .tmp-fiyat-build/source.b64.* > source.b64
+          base64 --decode source.b64 > source.zip
+          unzip -q source.zip
+
+      - name: Build installable APK
+        working-directory: FiyatAvcisi
+        run: gradle --no-daemon --stacktrace clean assembleDebug
+
+      - name: Prepare package
+        shell: bash
+        run: |
+          cp FiyatAvcisi/app/build/outputs/apk/debug/app-debug.apk FiyatAvcisi-v1.0.0-debug.apk
+          sha256sum FiyatAvcisi-v1.0.0-debug.apk > FiyatAvcisi-v1.0.0-debug-SHA256.txt
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FiyatAvcisi-APK
+          path: |
+            FiyatAvcisi-v1.0.0-debug.apk
+            FiyatAvcisi-v1.0.0-debug-SHA256.txt
+          if-no-files-found: error
+          retention-days: 7
