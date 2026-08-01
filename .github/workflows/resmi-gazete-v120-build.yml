@@ -18,6 +18,13 @@ jobs:
       - name: Check out build branch
         uses: actions/checkout@v4
 
+      - name: Restore Android project
+        shell: bash
+        run: |
+          base64 --decode resmi-gazete-v120/source.b64 > source.zip
+          mkdir -p resmi-gazete-v120/project
+          unzip -q source.zip -d resmi-gazete-v120/project
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -39,20 +46,20 @@ jobs:
           gradle-version: '8.9'
 
       - name: Build installable APK
-        working-directory: resmi-gazete-v120
+        working-directory: resmi-gazete-v120/project
         run: gradle --no-daemon --stacktrace clean assembleDebug
 
       - name: Verify and package
         shell: bash
         run: |
-          cp resmi-gazete-v120/app/build/outputs/apk/debug/app-debug.apk ResmiGazeteOzeti-v1.2.0.apk
+          cp resmi-gazete-v120/project/app/build/outputs/apk/debug/app-debug.apk ResmiGazeteOzeti-v1.2.0.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs ResmiGazeteOzeti-v1.2.0.apk > ResmiGazeteOzeti-v1.2.0-IMZA.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging ResmiGazeteOzeti-v1.2.0.apk > ResmiGazeteOzeti-v1.2.0-APK-BILGI.txt
           grep -q "package: name='com.hakim.resmigazeteozeti' versionCode='3' versionName='1.2.0'" ResmiGazeteOzeti-v1.2.0-APK-BILGI.txt
           unzip -t ResmiGazeteOzeti-v1.2.0.apk > ResmiGazeteOzeti-v1.2.0-ZIP-KONTROL.txt
           sha256sum ResmiGazeteOzeti-v1.2.0.apk > ResmiGazeteOzeti-v1.2.0-SHA256.txt
-          (cd resmi-gazete-v120 && zip -qr ../ResmiGazeteOzeti-v1.2.0-AndroidStudio.zip . -x '*/build/*' '.gradle/*')
-          cp resmi-gazete-v120/README_TR.md ResmiGazeteOzeti-v1.2.0-KURULUM.md
+          (cd resmi-gazete-v120/project && zip -qr ../../../ResmiGazeteOzeti-v1.2.0-AndroidStudio.zip . -x '*/build/*' '.gradle/*')
+          cp resmi-gazete-v120/project/README_TR.md ResmiGazeteOzeti-v1.2.0-KURULUM.md
           zip -q ResmiGazeteOzeti-v1.2.0-TAM-PAKET.zip \
             ResmiGazeteOzeti-v1.2.0.apk \
             ResmiGazeteOzeti-v1.2.0-AndroidStudio.zip \
