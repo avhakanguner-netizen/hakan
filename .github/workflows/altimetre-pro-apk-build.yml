@@ -48,6 +48,10 @@ jobs:
           echo 'b985db250f0a919a443c26caf7bc2c8f4c36d6ecd734b64c701ebfa73eb5d180  altimetre-project.zip' | sha256sum -c -
           unzip -q altimetre-project.zip
           sed -i 's/androidx.compose:compose-bom:2026.04.00/androidx.compose:compose-bom:2026.06.00/' AltimetrePro/app/build.gradle.kts
+          sed -i 's/fun setUnitSystem(/fun updateUnitSystem(/g; s/setUnitSystem(/updateUnitSystem(/g' AltimetrePro/app/src/main/java/com/hakan/altimetrepro/AltimeterController.kt AltimetrePro/app/src/main/java/com/hakan/altimetrepro/ui/AltimeterApp.kt
+          sed -i 's/fun setThemeMode(/fun updateThemeMode(/g; s/setThemeMode(/updateThemeMode(/g' AltimetrePro/app/src/main/java/com/hakan/altimetrepro/AltimeterController.kt AltimetrePro/app/src/main/java/com/hakan/altimetrepro/ui/AltimeterApp.kt
+          sed -i 's/fun setSmoothing(/fun updateSmoothing(/g; s/setSmoothing(/updateSmoothing(/g' AltimetrePro/app/src/main/java/com/hakan/altimetrepro/AltimeterController.kt AltimetrePro/app/src/main/java/com/hakan/altimetrepro/ui/AltimeterApp.kt
+          sed -i 's/fun setKeepScreenOn(/fun updateKeepScreenOn(/g; s/setKeepScreenOn(/updateKeepScreenOn(/g' AltimetrePro/app/src/main/java/com/hakan/altimetrepro/AltimeterController.kt AltimetrePro/app/src/main/java/com/hakan/altimetrepro/ui/AltimeterApp.kt
 
       - name: Run tests and build installable APK
         working-directory: AltimetrePro
