@@ -1,0 +1,42 @@
+[
+  {
+    "title": "Suç ve Ceza",
+    "author": "Fyodor Dostoyevski",
+    "publisher": "İş Bankası Kültür",
+    "year": 2022,
+    "topic": "Klasik Roman",
+    "location": "Raf A - Sıra 3"
+  },
+  {
+    "title": "Körlük",
+    "author": "José Saramago",
+    "publisher": "Kırmızı Kedi",
+    "year": 2021,
+    "topic": "Distopya",
+    "location": "Raf B - Sıra 1"
+  },
+  {
+    "title": "Bir Ömür Nasıl Yaşanır?",
+    "author": "İlber Ortaylı",
+    "publisher": "Kronik Kitap",
+    "year": 2019,
+    "topic": "Deneme",
+    "location": "Raf C - Sıra 4"
+  },
+  {
+    "title": "Simyacı",
+    "author": "Paulo Coelho",
+    "publisher": "Can Yayınları",
+    "year": 2020,
+    "topic": "Roman",
+    "location": "Raf A - Sıra 5"
+  },
+  {
+    "title": "Veri Yapıları ve Algoritmalar",
+    "author": "Cormen, Leiserson, Rivest, Stein",
+    "publisher": "Palme Yayıncılık",
+    "year": 2016,
+    "topic": "Bilgisayar Bilimi",
+    "location": "Raf D - Sıra 2"
+  }
+]
