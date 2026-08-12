@@ -1,0 +1,58 @@
+name: Build SarjTR APK
+
+on:
+  push:
+    branches:
+      - agent/ev-sarj-haritasi
+    paths:
+      - 'ev-sarj-android/**'
+      - '.github/workflows/ev-sarj-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Bundle Leaflet
+        run: |
+          curl -fsSL 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js' -o ev-sarj-android/app/src/main/assets/leaflet.js
+          curl -fsSL 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css' -o ev-sarj-android/app/src/main/assets/leaflet.css
+
+      - name: Build installable debug APK
+        working-directory: ev-sarj-android
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Prepare APK
+        run: |
+          mkdir -p out
+          cp ev-sarj-android/app/build/outputs/apk/debug/app-debug.apk out/SarjTR-1.0.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SarjTR-APK
+          path: out/SarjTR-1.0.apk
+          if-no-files-found: error
+          retention-days: 30
