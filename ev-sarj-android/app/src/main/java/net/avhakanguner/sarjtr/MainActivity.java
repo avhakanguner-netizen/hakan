@@ -17,6 +17,15 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+
 public class MainActivity extends Activity {
     private static final int LOCATION_PERMISSION_REQUEST = 73;
     private WebView webView;
@@ -36,7 +45,7 @@ public class MainActivity extends Activity {
         settings.setAllowContentAccess(true);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " SarjTR/1.0");
+        settings.setUserAgentString(settings.getUserAgentString() + " SarjTR/1.1");
 
         webView.addJavascriptInterface(new AndroidBridge(), "AndroidBridge");
         webView.setWebViewClient(new WebViewClient() {
@@ -67,6 +76,16 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void geocodeDestination(String query) {
+            if (query == null || query.trim().isEmpty()) {
+                inject("window.onGeocodeError && window.onGeocodeError('Hedef boş');");
+                return;
+            }
+            final String requested = query.trim();
+            new Thread(() -> geocode(requested)).start();
+        }
+
+        @JavascriptInterface
         public void openNavigation(double lat, double lon, String title) {
             runOnUiThread(() -> {
                 Uri geo = Uri.parse("geo:" + lat + "," + lon + "?q=" + lat + "," + lon + "(" + Uri.encode(title) + ")");
@@ -87,6 +106,41 @@ public class MainActivity extends Activity {
                         Uri.fromParts("package", getPackageName(), null));
                 startActivity(intent);
             });
+        }
+    }
+
+    private void geocode(String query) {
+        HttpURLConnection connection = null;
+        try {
+            String encoded = URLEncoder.encode(query, "UTF-8");
+            URL url = new URL("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=tr&q=" + encoded);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setConnectTimeout(12000);
+            connection.setReadTimeout(12000);
+            connection.setRequestProperty("User-Agent", "SarjTR/1.1 Android EV charging map (github.com/avhakanguner-netizen/hakan)");
+            connection.setRequestProperty("Accept-Language", "tr");
+            connection.setRequestProperty("Referer", "https://github.com/avhakanguner-netizen/hakan");
+            int code = connection.getResponseCode();
+            if (code < 200 || code >= 300) throw new Exception("Adres servisi HTTP " + code);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), "UTF-8"));
+            StringBuilder body = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) body.append(line);
+            reader.close();
+            JSONArray arr = new JSONArray(body.toString());
+            if (arr.length() == 0) {
+                inject("window.onGeocodeError && window.onGeocodeError('Hedef bulunamadı');");
+                return;
+            }
+            JSONObject first = arr.getJSONObject(0);
+            double lat = Double.parseDouble(first.getString("lat"));
+            double lon = Double.parseDouble(first.getString("lon"));
+            String name = first.optString("display_name", query);
+            inject("window.onGeocodeResult && window.onGeocodeResult(" + lat + "," + lon + "," + JSONObject.quote(name) + ");");
+        } catch (Exception e) {
+            inject("window.onGeocodeError && window.onGeocodeError(" + JSONObject.quote("Adres bulunamadı: " + e.getMessage()) + ");");
+        } finally {
+            if (connection != null) connection.disconnect();
         }
     }
 
@@ -112,11 +166,8 @@ public class MainActivity extends Activity {
                     break;
                 }
             }
-            if (granted) {
-                locate();
-            } else {
-                inject("window.onLocationError && window.onLocationError('Konum izni verilmedi');");
-            }
+            if (granted) locate();
+            else inject("window.onLocationError && window.onLocationError('Konum izni verilmedi');");
         }
     }
 
@@ -159,9 +210,7 @@ public class MainActivity extends Activity {
                 requested = true;
             }
         } catch (Exception ignored) {}
-        if (!requested && best == null) {
-            inject("window.onLocationError && window.onLocationError('Konum servisi kapalı');");
-        }
+        if (!requested && best == null) inject("window.onLocationError && window.onLocationError('Konum servisi kapalı');");
     }
 
     private void sendLocation(Location location) {
