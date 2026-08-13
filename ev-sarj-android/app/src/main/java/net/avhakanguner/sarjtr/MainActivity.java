@@ -21,13 +21,23 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Iterator;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
     private static final int LOCATION_PERMISSION_REQUEST = 73;
+    private static final String USER_AGENT = "SarjTR/1.2 Android EV charging map (github.com/avhakanguner-netizen/hakan)";
+    private static final Pattern KW_PATTERN = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*kW", Pattern.CASE_INSENSITIVE);
+
     private WebView webView;
     private LocationManager locationManager;
     private LocationListener listener;
@@ -45,7 +55,7 @@ public class MainActivity extends Activity {
         settings.setAllowContentAccess(true);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " SarjTR/1.1");
+        settings.setUserAgentString(settings.getUserAgentString() + " SarjTR/1.2");
 
         webView.addJavascriptInterface(new AndroidBridge(), "AndroidBridge");
         webView.setWebViewClient(new WebViewClient() {
@@ -53,8 +63,7 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 if (!request.isForMainFrame()) return false;
                 Uri uri = request.getUrl();
-                String scheme = uri.getScheme();
-                if ("file".equalsIgnoreCase(scheme)) return false;
+                if ("file".equalsIgnoreCase(uri.getScheme())) return false;
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, uri));
                 } catch (Exception e) {
@@ -70,6 +79,17 @@ public class MainActivity extends Activity {
     }
 
     public class AndroidBridge {
+        @JavascriptInterface
+        public void requestStations(String ocmKey) {
+            final String key = ocmKey == null ? "" : ocmKey.trim();
+            new Thread(() -> loadStations(key)).start();
+        }
+
+        @JavascriptInterface
+        public void requestRoute(double fromLat, double fromLon, double toLat, double toLon) {
+            new Thread(() -> loadRoute(fromLat, fromLon, toLat, toLon)).start();
+        }
+
         @JavascriptInterface
         public void requestLocation() {
             runOnUiThread(() -> ensureLocationPermissionAndLocate());
@@ -89,9 +109,8 @@ public class MainActivity extends Activity {
         public void openNavigation(double lat, double lon, String title) {
             runOnUiThread(() -> {
                 Uri geo = Uri.parse("geo:" + lat + "," + lon + "?q=" + lat + "," + lon + "(" + Uri.encode(title) + ")");
-                Intent intent = new Intent(Intent.ACTION_VIEW, geo);
                 try {
-                    startActivity(intent);
+                    startActivity(new Intent(Intent.ACTION_VIEW, geo));
                 } catch (Exception e) {
                     Uri web = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=" + lat + "," + lon);
                     startActivity(new Intent(Intent.ACTION_VIEW, web));
@@ -109,25 +128,231 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void loadStations(String ocmKey) {
+        try {
+            JSONArray combined = loadOsmStations();
+            if (!ocmKey.isEmpty()) {
+                try {
+                    JSONArray ocm = loadOcmStations(ocmKey);
+                    for (int i = 0; i < ocm.length(); i++) combined.put(ocm.getJSONObject(i));
+                } catch (Exception e) {
+                    inject("window.onSupplementalDataWarning && window.onSupplementalDataWarning(" +
+                            JSONObject.quote("Open Charge Map ek verisi alınamadı: " + safeMessage(e)) + ");");
+                }
+            }
+            inject("window.onStationsData && window.onStationsData(" + JSONObject.quote(combined.toString()) + ");");
+        } catch (Exception e) {
+            inject("window.onStationsError && window.onStationsError(" +
+                    JSONObject.quote("Şarj istasyonları alınamadı: " + safeMessage(e)) + ");");
+        }
+    }
+
+    private JSONArray loadOsmStations() throws Exception {
+        String query = "[out:json][timeout:90];area[\"ISO3166-1\"=\"TR\"][admin_level=2]->.a;(nwr[\"amenity\"=\"charging_station\"](area.a););out center tags;";
+        String form = "data=" + URLEncoder.encode(query, "UTF-8");
+        String[] endpoints = new String[]{
+                "https://overpass-api.de/api/interpreter",
+                "https://overpass.kumi.systems/api/interpreter"
+        };
+        Exception last = null;
+        for (String endpoint : endpoints) {
+            try {
+                String body = httpPostForm(endpoint, form, 100_000);
+                JSONObject root = new JSONObject(body);
+                JSONArray elements = root.optJSONArray("elements");
+                JSONArray result = new JSONArray();
+                if (elements == null) return result;
+                for (int i = 0; i < elements.length(); i++) {
+                    JSONObject station = normalizeOsm(elements.optJSONObject(i));
+                    if (station != null) result.put(station);
+                }
+                if (result.length() > 0) return result;
+                last = new Exception("OpenStreetMap boş sonuç döndürdü");
+            } catch (Exception e) {
+                last = e;
+            }
+        }
+        throw last != null ? last : new Exception("OpenStreetMap servisine ulaşılamadı");
+    }
+
+    private JSONObject normalizeOsm(JSONObject element) {
+        try {
+            if (element == null) return null;
+            JSONObject tags = element.optJSONObject("tags");
+            if (tags == null) tags = new JSONObject();
+            double lat;
+            double lon;
+            if (element.has("lat") && element.has("lon")) {
+                lat = element.getDouble("lat");
+                lon = element.getDouble("lon");
+            } else {
+                JSONObject center = element.optJSONObject("center");
+                if (center == null) return null;
+                lat = center.getDouble("lat");
+                lon = center.getDouble("lon");
+            }
+
+            String operator = first(tags, "operator", "brand");
+            String name = first(tags, "name", "brand", "operator");
+            if (name.isEmpty()) name = "Şarj İstasyonu";
+            String address = joinNonEmpty(
+                    tags.optString("addr:street", ""),
+                    tags.optString("addr:housenumber", ""),
+                    tags.optString("addr:district", ""),
+                    tags.optString("addr:city", "")
+            );
+            String price = tags.optString("charge", "").trim();
+            String fee = tags.optString("fee", "").trim().toLowerCase(Locale.ROOT);
+            if (price.isEmpty() && "no".equals(fee)) price = "Ücretsiz";
+            else if (price.isEmpty() && "yes".equals(fee)) price = "Ücretli · tarife belirtilmemiş";
+
+            boolean dc = false;
+            boolean ac = false;
+            double power = 0;
+            Iterator<String> keys = tags.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                String value = tags.optString(key, "");
+                String lower = key.toLowerCase(Locale.ROOT);
+                if (isTruthy(value)) {
+                    if (lower.contains("socket:ccs") || lower.contains("socket:chademo") ||
+                            lower.contains("socket:nacs") || lower.contains("socket:tesla_supercharger")) dc = true;
+                    if (lower.contains("socket:type2") || lower.contains("socket:type1") ||
+                            lower.contains("socket:schuko") || lower.contains("socket:cee")) ac = true;
+                }
+                if (lower.contains("output") || lower.contains("power")) {
+                    Matcher matcher = KW_PATTERN.matcher(value);
+                    while (matcher.find()) {
+                        try {
+                            double p = Double.parseDouble(matcher.group(1).replace(',', '.'));
+                            if (p > power) power = p;
+                        } catch (Exception ignored) {}
+                    }
+                }
+            }
+
+            JSONObject out = new JSONObject();
+            out.put("id", element.optString("type", "n") + "-" + element.optLong("id"));
+            out.put("source", "OSM");
+            out.put("lat", lat);
+            out.put("lon", lon);
+            out.put("name", name);
+            out.put("operator", operator);
+            out.put("address", address);
+            out.put("power", power > 0 ? power : JSONObject.NULL);
+            out.put("dc", dc);
+            out.put("ac", ac);
+            out.put("capacity", parseIntOrNull(tags.optString("capacity", "")));
+            out.put("hours", tags.optString("opening_hours", ""));
+            out.put("price", price);
+            out.put("status", first(tags, "operational_status", "status"));
+            out.put("isOperational", JSONObject.NULL);
+            out.put("live", false);
+            return out;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private JSONArray loadOcmStations(String key) throws Exception {
+        String url = "https://api.openchargemap.io/v3/poi/?output=json&countrycode=TR&maxresults=5000&compact=true&verbose=false&key=" +
+                URLEncoder.encode(key, "UTF-8");
+        JSONArray raw = new JSONArray(httpGet(url, 45_000));
+        JSONArray result = new JSONArray();
+        for (int i = 0; i < raw.length(); i++) {
+            JSONObject station = normalizeOcm(raw.optJSONObject(i));
+            if (station != null) result.put(station);
+        }
+        return result;
+    }
+
+    private JSONObject normalizeOcm(JSONObject p) {
+        try {
+            if (p == null) return null;
+            JSONObject a = p.optJSONObject("AddressInfo");
+            if (a == null) return null;
+            double lat = a.getDouble("Latitude");
+            double lon = a.getDouble("Longitude");
+            JSONObject op = p.optJSONObject("OperatorInfo");
+            String operator = op == null ? "" : op.optString("Title", "");
+            String name = a.optString("Title", "");
+            if (name.isEmpty()) name = operator.isEmpty() ? "Şarj İstasyonu" : operator;
+
+            JSONArray connections = p.optJSONArray("Connections");
+            double power = 0;
+            boolean dc = false;
+            boolean ac = false;
+            int sockets = 0;
+            if (connections != null) {
+                for (int i = 0; i < connections.length(); i++) {
+                    JSONObject c = connections.optJSONObject(i);
+                    if (c == null) continue;
+                    power = Math.max(power, c.optDouble("PowerKW", 0));
+                    sockets += Math.max(1, c.optInt("Quantity", 1));
+                    JSONObject ct = c.optJSONObject("ConnectionType");
+                    String title = ct == null ? "" : ct.optString("Title", "");
+                    String t = title.toLowerCase(Locale.ROOT);
+                    if (t.contains("ccs") || t.contains("chademo") || t.contains("nacs") || t.contains("tesla")) dc = true;
+                    if (t.contains("type 2") || t.contains("type 1") || t.contains("cee") || t.contains("schuko")) ac = true;
+                }
+            }
+
+            JSONObject st = p.optJSONObject("StatusType");
+            Object operational = JSONObject.NULL;
+            String status = "";
+            if (st != null) {
+                status = st.optString("Title", "");
+                if (st.has("IsOperational") && !st.isNull("IsOperational")) operational = st.optBoolean("IsOperational");
+            }
+
+            JSONObject out = new JSONObject();
+            out.put("id", String.valueOf(p.optLong("ID", iSafeId(p))));
+            out.put("source", "OCM");
+            out.put("lat", lat);
+            out.put("lon", lon);
+            out.put("name", name);
+            out.put("operator", operator);
+            out.put("address", joinComma(
+                    a.optString("AddressLine1", ""),
+                    a.optString("Town", ""),
+                    a.optString("StateOrProvince", "")
+            ));
+            out.put("power", power > 0 ? power : JSONObject.NULL);
+            out.put("dc", dc);
+            out.put("ac", ac);
+            int numberOfPoints = p.optInt("NumberOfPoints", 0);
+            out.put("capacity", numberOfPoints > 0 ? numberOfPoints : (sockets > 0 ? sockets : JSONObject.NULL));
+            out.put("hours", "");
+            out.put("price", p.optString("UsageCost", ""));
+            out.put("status", status);
+            out.put("isOperational", operational);
+            out.put("live", false);
+            return out;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private long iSafeId(JSONObject p) {
+        return Math.abs(p.toString().hashCode());
+    }
+
+    private void loadRoute(double fromLat, double fromLon, double toLat, double toLon) {
+        try {
+            String url = "https://router.project-osrm.org/route/v1/driving/" + fromLon + "," + fromLat + ";" + toLon + "," + toLat +
+                    "?overview=full&geometries=geojson&steps=false";
+            String body = httpGet(url, 35_000);
+            inject("window.onRouteData && window.onRouteData(" + JSONObject.quote(body) + ");");
+        } catch (Exception e) {
+            inject("window.onRouteError && window.onRouteError(" + JSONObject.quote("Rota alınamadı: " + safeMessage(e)) + ");");
+        }
+    }
+
     private void geocode(String query) {
-        HttpURLConnection connection = null;
         try {
             String encoded = URLEncoder.encode(query, "UTF-8");
-            URL url = new URL("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=tr&q=" + encoded);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setConnectTimeout(12000);
-            connection.setReadTimeout(12000);
-            connection.setRequestProperty("User-Agent", "SarjTR/1.1 Android EV charging map (github.com/avhakanguner-netizen/hakan)");
-            connection.setRequestProperty("Accept-Language", "tr");
-            connection.setRequestProperty("Referer", "https://github.com/avhakanguner-netizen/hakan");
-            int code = connection.getResponseCode();
-            if (code < 200 || code >= 300) throw new Exception("Adres servisi HTTP " + code);
-            BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), "UTF-8"));
-            StringBuilder body = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) body.append(line);
-            reader.close();
-            JSONArray arr = new JSONArray(body.toString());
+            String body = httpGet("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=tr&q=" + encoded, 20_000);
+            JSONArray arr = new JSONArray(body);
             if (arr.length() == 0) {
                 inject("window.onGeocodeError && window.onGeocodeError('Hedef bulunamadı');");
                 return;
@@ -138,10 +363,110 @@ public class MainActivity extends Activity {
             String name = first.optString("display_name", query);
             inject("window.onGeocodeResult && window.onGeocodeResult(" + lat + "," + lon + "," + JSONObject.quote(name) + ");");
         } catch (Exception e) {
-            inject("window.onGeocodeError && window.onGeocodeError(" + JSONObject.quote("Adres bulunamadı: " + e.getMessage()) + ");");
-        } finally {
-            if (connection != null) connection.disconnect();
+            inject("window.onGeocodeError && window.onGeocodeError(" + JSONObject.quote("Adres bulunamadı: " + safeMessage(e)) + ");");
         }
+    }
+
+    private String httpGet(String urlString, int timeoutMs) throws Exception {
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL(urlString).openConnection();
+            c.setConnectTimeout(timeoutMs);
+            c.setReadTimeout(timeoutMs);
+            c.setRequestProperty("User-Agent", USER_AGENT);
+            c.setRequestProperty("Accept", "application/json");
+            c.setRequestProperty("Accept-Language", "tr");
+            int code = c.getResponseCode();
+            String body = readBody(code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream());
+            if (code < 200 || code >= 300) throw new Exception("HTTP " + code + (body.isEmpty() ? "" : " · " + body.substring(0, Math.min(120, body.length()))));
+            return body;
+        } finally {
+            if (c != null) c.disconnect();
+        }
+    }
+
+    private String httpPostForm(String urlString, String form, int timeoutMs) throws Exception {
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL(urlString).openConnection();
+            c.setRequestMethod("POST");
+            c.setDoOutput(true);
+            c.setConnectTimeout(timeoutMs);
+            c.setReadTimeout(timeoutMs);
+            c.setRequestProperty("User-Agent", USER_AGENT);
+            c.setRequestProperty("Accept", "application/json");
+            c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
+            byte[] bytes = form.getBytes(StandardCharsets.UTF_8);
+            c.setFixedLengthStreamingMode(bytes.length);
+            try (OutputStream out = c.getOutputStream()) {
+                out.write(bytes);
+            }
+            int code = c.getResponseCode();
+            String body = readBody(code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream());
+            if (code < 200 || code >= 300) throw new Exception("HTTP " + code + (body.isEmpty() ? "" : " · " + body.substring(0, Math.min(120, body.length()))));
+            return body;
+        } finally {
+            if (c != null) c.disconnect();
+        }
+    }
+
+    private String readBody(InputStream stream) throws Exception {
+        if (stream == null) return "";
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            StringBuilder body = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) body.append(line);
+            return body.toString();
+        }
+    }
+
+    private static String first(JSONObject o, String... keys) {
+        for (String k : keys) {
+            String v = o.optString(k, "").trim();
+            if (!v.isEmpty()) return v;
+        }
+        return "";
+    }
+
+    private static boolean isTruthy(String v) {
+        if (v == null) return false;
+        String x = v.trim().toLowerCase(Locale.ROOT);
+        if (x.isEmpty() || "no".equals(x) || "false".equals(x) || "0".equals(x)) return false;
+        return true;
+    }
+
+    private static Object parseIntOrNull(String s) {
+        try {
+            int v = Integer.parseInt(s.trim());
+            return v > 0 ? v : JSONObject.NULL;
+        } catch (Exception e) {
+            return JSONObject.NULL;
+        }
+    }
+
+    private static String joinNonEmpty(String... values) {
+        StringBuilder b = new StringBuilder();
+        for (String v : values) {
+            if (v == null || v.trim().isEmpty()) continue;
+            if (b.length() > 0) b.append(' ');
+            b.append(v.trim());
+        }
+        return b.toString();
+    }
+
+    private static String joinComma(String... values) {
+        StringBuilder b = new StringBuilder();
+        for (String v : values) {
+            if (v == null || v.trim().isEmpty()) continue;
+            if (b.length() > 0) b.append(", ");
+            b.append(v.trim());
+        }
+        return b.toString();
+    }
+
+    private static String safeMessage(Exception e) {
+        String m = e.getMessage();
+        return m == null || m.trim().isEmpty() ? e.getClass().getSimpleName() : m;
     }
 
     private void ensureLocationPermissionAndLocate() {
@@ -214,9 +539,7 @@ public class MainActivity extends Activity {
     }
 
     private void sendLocation(Location location) {
-        double lat = location.getLatitude();
-        double lon = location.getLongitude();
-        inject("window.setUserLocation && window.setUserLocation(" + lat + "," + lon + ");");
+        inject("window.setUserLocation && window.setUserLocation(" + location.getLatitude() + "," + location.getLongitude() + ");");
     }
 
     private void inject(String js) {
